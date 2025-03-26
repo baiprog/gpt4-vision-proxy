@@ -1,0 +1,13 @@
+{
+  "name": "gpt4-vision-proxy",
+  "version": "1.0.0",
+  "description": "Proxy server for GPT-4 Vision API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "express": "^4.17.1"
+  }
+}
