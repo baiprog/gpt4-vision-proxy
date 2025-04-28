@@ -60,6 +60,17 @@ app.post('/plan', async (req, res) => {
     return res.status(400).json({ error: 'No prompt provided' });
   }
 
+  // ДИНАМИЧЕСКИ добавим инструкцию для ChatGPT
+  const planPrompt = `
+${prompt}
+
+ВАЖНО! Ответь строго валидным JSON-массивом без лишнего текста, комментариев, пояснений, до и после массива. Пример:
+[
+  { "time": "Завтрак", "name": "Овсянка с ягодами", "calories": 350, "protein": 15, "fats": 6, "carbs": 60 },
+  { "time": "Обед", "name": "Куриная грудка с рисом и овощами", "calories": 450, "protein": 40, "fats": 10, "carbs": 50 }
+]
+`;
+
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -68,7 +79,7 @@ app.post('/plan', async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: prompt
+            content: planPrompt
           }
         ],
         max_tokens: 1000,
