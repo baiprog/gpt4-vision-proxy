@@ -3,6 +3,8 @@ const axios = require('axios');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT;
+const { db } = require('./firebase'); // Подключение к Firestore
+const { collection, getDocs, query, where, addDoc } = require('firebase/firestore');
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -60,7 +62,6 @@ app.post('/plan', async (req, res) => {
     return res.status(400).json({ error: 'No prompt provided' });
   }
 
-  // ДИНАМИЧЕСКИ добавим инструкцию для ChatGPT
   const planPrompt = `
 ${prompt}
 
@@ -77,10 +78,7 @@ ${prompt}
       {
         model: 'gpt-4',
         messages: [
-          {
-            role: 'user',
-            content: planPrompt
-          }
+          { role: 'user', content: planPrompt }
         ],
         max_tokens: 1000,
         temperature: 0.7
@@ -100,7 +98,7 @@ ${prompt}
   }
 });
 
-// 💬 Обычный текстовый чат с ИИ (ChatGPT)
+// 💬 Обычный текстовый чат с ИИ
 app.post('/chat', async (req, res) => {
   const { messages, model = 'gpt-3.5-turbo', max_tokens = 1000, temperature = 0.7 } = req.body;
 
@@ -128,6 +126,63 @@ app.post('/chat', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('❌ Ошибка запроса к OpenAI (чат):', error.response?.data || error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🍽️ Генерация фото блюда
+async function findSavedImage(dishName) {
+  const q = query(collection(db, "foodImages"), where("dishName", "==", dishName.toLowerCase()));
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    return snapshot.docs[0].data();
+  }
+  return null;
+}
+
+async function saveImageToDatabase(dishName, imageUrl) {
+  await addDoc(collection(db, "foodImages"), {
+    dishName: dishName.toLowerCase(),
+    imageUrl,
+    createdAt: new Date(),
+  });
+}
+
+app.post('/generate-food-photo', async (req, res) => {
+  const { dishName } = req.body;
+
+  if (!dishName) {
+    return res.status(400).json({ error: 'Dish name is required' });
+  }
+
+  try {
+    const saved = await findSavedImage(dishName);
+    if (saved) {
+      return res.json({ imageUrl: saved.imageUrl });
+    }
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/images/generations',
+      {
+        prompt: `Professional photo of a delicious ${dishName}, top view, studio lighting, 512x512`,
+        n: 1,
+        size: "512x512"
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const generatedImageUrl = response.data.data[0].url;
+    await saveImageToDatabase(dishName, generatedImageUrl);
+
+    res.json({ imageUrl: generatedImageUrl });
+
+  } catch (error) {
+    console.error('❌ Ошибка генерации фото блюда:', error.response?.data || error.message);
     res.status(500).json({ error: error.message });
   }
 });
